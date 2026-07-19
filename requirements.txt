@@ -5,7 +5,8 @@ python-multipart==0.0.9
 pydantic==2.9.2
 
 # --- Retrieval ---
-sentence-transformers==3.0.1
+transformers==4.44.2
+torch==2.4.1
 faiss-cpu==1.8.0
 rank-bm25==0.2.2
 numpy==1.26.4
@@ -20,5 +21,7 @@ llama-cpp-python==0.2.90
 #       pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
 #    (pick the cuXXX tag matching your installed CUDA toolkit). Then server.py's
 #    N_GPU_LAYERS setting will actually offload layers to the GPU.
-# 2. sentence-transformers will pull in torch as a dependency; a CPU-only torch is fine,
-#    the embedding model is tiny (MiniLM-L6, ~90MB) and runs fast on CPU.
+# 2. Embeddings use plain `transformers` (AutoTokenizer + AutoModel with manual
+#    mean-pooling) instead of sentence-transformers -- no extra wrapper package.
+#    A CPU-only torch install is fine; the embedding model is tiny (MiniLM-L6,
+#    ~90MB) and runs fast on CPU.
