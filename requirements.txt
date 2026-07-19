@@ -1,0 +1,24 @@
+# --- Core API ---
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.9
+pydantic==2.9.2
+
+# --- Retrieval ---
+sentence-transformers==3.0.1
+faiss-cpu==1.8.0
+rank-bm25==0.2.2
+numpy==1.26.4
+
+# --- Local LLM (Qwen2.5-3B-Instruct GGUF) ---
+llama-cpp-python==0.2.90
+
+# Notes:
+# 1. llama-cpp-python on Windows: the plain `pip install llama-cpp-python` gives you a
+#    CPU-only build. For GPU offload on your GTX 1650, install a CUDA prebuilt wheel instead:
+#       pip uninstall llama-cpp-python
+#       pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+#    (pick the cuXXX tag matching your installed CUDA toolkit). Then server.py's
+#    N_GPU_LAYERS setting will actually offload layers to the GPU.
+# 2. sentence-transformers will pull in torch as a dependency; a CPU-only torch is fine,
+#    the embedding model is tiny (MiniLM-L6, ~90MB) and runs fast on CPU.

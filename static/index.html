@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Runbook Console · On-Call RAG Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-void: #0A0D12;
+    --bg-panel: #10141C;
+    --bg-raised: #161B25;
+    --border: #232A38;
+    --text-primary: #E8EBF2;
+    --text-muted: #7A8399;
+    --accent-signal: #FFB020;
+    --accent-cyan: #3FD6C4;
+    --accent-danger: #F0546B;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 15% -10%, rgba(63,214,196,0.06), transparent 40%),
+      radial-gradient(circle at 100% 0%, rgba(255,176,32,0.05), transparent 35%),
+      var(--bg-void);
+    color:var(--text-primary);
+    font-family:var(--sans);
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    overflow:hidden;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important; transition:none !important;}
+  }
+
+  /* ---------- Status ticker (signature element) ---------- */
+  .ticker{
+    display:flex;
+    align-items:center;
+    gap:22px;
+    padding:12px 22px;
+    background:var(--bg-panel);
+    border-bottom:1px solid var(--border);
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--text-muted);
+    flex-shrink:0;
+    flex-wrap:wrap;
+    row-gap:6px;
+  }
+  .ticker .brand{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    font-family:var(--sans);
+    font-weight:700;
+    font-size:14px;
+    color:var(--text-primary);
+    letter-spacing:0.2px;
+    margin-right:6px;
+  }
+  .live-dot{
+    width:8px;height:8px;border-radius:50%;
+    background:var(--accent-signal);
+    box-shadow:0 0 0 0 rgba(255,176,32,0.6);
+    animation:pulse 2s infinite;
+    flex-shrink:0;
+  }
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(255,176,32,0.55);}
+    70%{box-shadow:0 0 0 7px rgba(255,176,32,0);}
+    100%{box-shadow:0 0 0 0 rgba(255,176,32,0);}
+  }
+  .ticker .sep{color:var(--border);}
+  .ticker .stat b{color:var(--text-primary); font-weight:600;}
+  .ticker .stat.cyan b{color:var(--accent-cyan);}
+
+  /* ---------- Transcript ---------- */
+  .transcript{
+    flex:1;
+    overflow-y:auto;
+    padding:28px 0 12px;
+  }
+  .transcript-inner{
+    max-width:760px;
+    margin:0 auto;
+    padding:0 22px;
+  }
+
+  .empty-state{
+    max-width:640px;
+    margin:8vh auto 0;
+    text-align:center;
+    padding:0 20px;
+  }
+  .empty-state h1{
+    font-size:26px;
+    margin:0 0 10px;
+    font-weight:700;
+  }
+  .empty-state p{
+    color:var(--text-muted);
+    font-size:14.5px;
+    line-height:1.6;
+    margin:0 0 26px;
+  }
+  .chips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    justify-content:center;
+  }
+  .chip{
+    font-family:var(--mono);
+    font-size:12.5px;
+    color:var(--text-primary);
+    background:var(--bg-panel);
+    border:1px solid var(--border);
+    padding:9px 14px;
+    border-radius:8px;
+    cursor:pointer;
+    transition:border-color .15s, background .15s, transform .1s;
+  }
+  .chip:hover{border-color:var(--accent-cyan); background:var(--bg-raised);}
+  .chip:active{transform:scale(0.97);}
+
+  .msg{
+    display:flex;
+    margin-bottom:22px;
+    animation:rise .25s ease;
+  }
+  @keyframes rise{
+    from{opacity:0; transform:translateY(6px);}
+    to{opacity:1; transform:translateY(0);}
+  }
+  .msg.user{justify-content:flex-end;}
+  .msg-bubble{
+    max-width:82%;
+  }
+  .msg.user .msg-bubble{
+    background:var(--bg-raised);
+    border:1px solid var(--border);
+    border-radius:12px 12px 2px 12px;
+    padding:11px 15px;
+    font-size:14.5px;
+    line-height:1.55;
+  }
+  .msg.assistant .msg-bubble{width:100%;}
+  .msg-meta{
+    font-family:var(--mono);
+    font-size:10.5px;
+    color:var(--text-muted);
+    margin-bottom:5px;
+    display:flex;
+    gap:8px;
+    align-items:center;
+  }
+  .msg.user .msg-meta{justify-content:flex-end;}
+  .role-tag{
+    font-weight:600;
+    letter-spacing:0.4px;
+  }
+  .role-tag.assistant{color:var(--accent-cyan);}
+  .role-tag.user{color:var(--text-muted);}
+
+  .assistant-text{
+    font-size:14.5px;
+    line-height:1.68;
+    padding:2px 0 4px;
+  }
+  .assistant-text b{color:var(--text-primary);}
+  .assistant-text code{
+    font-family:var(--mono);
+    background:var(--bg-panel);
+    border:1px solid var(--border);
+    padding:1px 5px;
+    border-radius:4px;
+    font-size:13px;
+  }
+
+  /* ---------- Markdown block elements ---------- */
+  .assistant-text p{
+    margin:0 0 12px;
+  }
+  .assistant-text p:last-child{
+    margin-bottom:0;
+  }
+  .assistant-text h3,
+  .assistant-text h4,
+  .assistant-text h5,
+  .assistant-text h6{
+    font-family:var(--sans);
+    color:var(--text-primary);
+    font-weight:700;
+    line-height:1.35;
+    margin:18px 0 8px;
+  }
+  .assistant-text > *:first-child{
+    margin-top:0;
+  }
+  .assistant-text h3{font-size:17px;}
+  .assistant-text h4{font-size:15.5px; color:var(--accent-cyan);}
+  .assistant-text h5{
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+    color:var(--text-muted);
+  }
+  .assistant-text h6{font-size:13px;}
+  .assistant-text ul,
+  .assistant-text ol{
+    margin:0 0 12px;
+    padding-left:22px;
+  }
+  .assistant-text li{
+    margin-bottom:6px;
+    line-height:1.6;
+  }
+  .assistant-text li:last-child{
+    margin-bottom:0;
+  }
+  .assistant-text pre{
+    background:var(--bg-panel);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:12px 14px;
+    margin:0 0 12px;
+    overflow-x:auto;
+  }
+  .assistant-text pre code{
+    background:none;
+    border:none;
+    padding:0;
+    font-size:12.5px;
+    line-height:1.55;
+    color:var(--text-primary);
+    white-space:pre;
+  }
+
+  .cursor{
+    display:inline-block;
+    width:7px; height:15px;
+    background:var(--accent-cyan);
+    margin-left:2px;
+    vertical-align:text-bottom;
+    animation:blink 1s step-start infinite;
+  }
+  @keyframes blink{50%{opacity:0;}}
+
+  .src-chip{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--accent-cyan);
+    background:rgba(63,214,196,0.1);
+    border:1px solid rgba(63,214,196,0.35);
+    padding:0px 6px;
+    border-radius:5px;
+    cursor:pointer;
+    white-space:nowrap;
+    text-decoration:none;
+  }
+  .src-chip:hover{background:rgba(63,214,196,0.2);}
+
+  /* ---------- Citation tickets ---------- */
+  .citations{
+    margin-top:12px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .citation-card{
+    background:var(--bg-panel);
+    border:1px solid var(--border);
+    border-left:3px solid var(--accent-cyan);
+    border-radius:8px;
+    padding:10px 13px;
+    cursor:pointer;
+    transition:background .15s, box-shadow .15s;
+  }
+  .citation-card.flash{box-shadow:0 0 0 2px rgba(63,214,196,0.4);}
+  .citation-card:hover{background:var(--bg-raised);}
+  .citation-card.sparse-only{border-left-color:var(--accent-signal);}
+  .cite-head{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    font-family:var(--mono);
+    font-size:11.5px;
+  }
+  .cite-id{
+    color:var(--bg-void);
+    background:var(--accent-cyan);
+    font-weight:700;
+    padding:1px 6px;
+    border-radius:4px;
+    flex-shrink:0;
+  }
+  .sparse-only .cite-id{background:var(--accent-signal);}
+  .cite-path{color:var(--text-primary); font-weight:500;}
+  .cite-lines{color:var(--text-muted); margin-left:auto;}
+  .cite-badge{
+    font-size:9.5px;
+    color:var(--text-muted);
+    border:1px solid var(--border);
+    padding:0 5px;
+    border-radius:3px;
+  }
+  .cite-snippet{
+    font-size:12.5px;
+    line-height:1.55;
+    color:var(--text-muted);
+    margin-top:8px;
+    padding-top:8px;
+    border-top:1px dashed var(--border);
+    display:none;
+    white-space:pre-wrap;
+  }
+  .citation-card.open .cite-snippet{display:block;}
+
+  .no-match-card{
+    background:rgba(240,84,107,0.08);
+    border:1px solid rgba(240,84,107,0.35);
+    border-left:3px solid var(--accent-danger);
+    border-radius:8px;
+    padding:12px 14px;
+    font-size:13.5px;
+    line-height:1.6;
+    color:var(--text-primary);
+  }
+  .no-match-card .tag{
+    font-family:var(--mono);
+    font-size:10.5px;
+    font-weight:700;
+    color:var(--accent-danger);
+    letter-spacing:0.5px;
+    display:block;
+    margin-bottom:6px;
+  }
+
+  .lat-footer{
+    font-family:var(--mono);
+    font-size:10px;
+    color:var(--text-muted);
+    margin-top:8px;
+    opacity:0.8;
+  }
+
+  /* ---------- Input bar ---------- */
+  .input-bar{
+    flex-shrink:0;
+    border-top:1px solid var(--border);
+    background:var(--bg-panel);
+    padding:14px 22px 18px;
+  }
+  .input-inner{
+    max-width:760px;
+    margin:0 auto;
+    display:flex;
+    gap:10px;
+    align-items:flex-end;
+  }
+  textarea{
+    flex:1;
+    resize:none;
+    background:var(--bg-raised);
+    border:1px solid var(--border);
+    color:var(--text-primary);
+    font-family:var(--sans);
+    font-size:14.5px;
+    line-height:1.5;
+    padding:12px 14px;
+    border-radius:10px;
+    outline:none;
+    max-height:140px;
+    transition:border-color .15s;
+  }
+  textarea:focus{border-color:var(--accent-cyan);}
+  textarea::placeholder{color:var(--text-muted);}
+
+  .send-btn{
+    background:var(--accent-signal);
+    color:#1A1200;
+    border:none;
+    font-family:var(--mono);
+    font-weight:700;
+    font-size:12.5px;
+    letter-spacing:0.3px;
+    padding:13px 18px;
+    border-radius:10px;
+    cursor:pointer;
+    transition:transform .1s, filter .15s;
+    flex-shrink:0;
+  }
+  .send-btn:hover{filter:brightness(1.08);}
+  .send-btn:active{transform:scale(0.97);}
+  .send-btn:disabled{opacity:0.45; cursor:not-allowed;}
+
+  .hint{
+    max-width:760px;
+    margin:8px auto 0;
+    font-family:var(--mono);
+    font-size:10.5px;
+    color:var(--text-muted);
+    padding:0 22px;
+  }
+
+  ::-webkit-scrollbar{width:10px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:var(--border); border-radius:6px;}
+
+  @media (max-width: 560px){
+    .ticker{font-size:10.5px; gap:12px; padding:10px 14px;}
+    .empty-state h1{font-size:21px;}
+    .msg-bubble{max-width:92%;}
+  }
+</style>
+</head>
+<body>
+
+  <div class="ticker" id="ticker">
+    <div class="brand"><span class="live-dot"></span>ON-CALL RUNBOOK CONSOLE</div>
+    <span id="stat-files" class="stat">-- files</span>
+    <span class="sep">/</span>
+    <span id="stat-chunks" class="stat">-- chunks</span>
+    <span class="sep">/</span>
+    <span id="stat-mode" class="stat cyan">--</span>
+  </div>
+
+  <div class="transcript" id="transcript">
+    <div class="transcript-inner">
+      <div class="empty-state" id="empty-state">
+        <h1>What's the incident?</h1>
+        <p>Ask in plain language. Answers are generated only from the runbooks below,<br>with an exact file + section + line citation for every claim.</p>
+        <div class="chips" id="chips"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-bar">
+    <div class="input-inner">
+      <textarea id="input" rows="1" placeholder="e.g. what do I do if the database connection pool is exhausted?"></textarea>
+      <button class="send-btn" id="send-btn">SEND ⏎</button>
+    </div>
+    <div class="hint">Enter to send · Shift+Enter for a new line · answers are grounded &amp; cited, not freeform</div>
+  </div>
+
+<script>
+const SUGGESTIONS = [
+  "database connection pool is exhausted",
+  "disk space is critical on a prod node",
+  "CPU utilization is pegged at 100%",
+  "a kubernetes pod is stuck crash-looping",
+  "how do I fail over an AWS RDS instance",
+];
+
+const transcript = document.getElementById('transcript');
+const transcriptInner = transcript.querySelector('.transcript-inner');
+const emptyState = document.getElementById('empty-state');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('send-btn');
+const chipsEl = document.getElementById('chips');
+
+function nowStamp(){
+  const d = new Date();
+  return d.toTimeString().slice(0,8);
+}
+
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Dependency-free markdown-ish renderer: fenced code blocks, ### headings,
+// **bold**, `code`, numbered lists, bullet lists, and paragraph/line breaks.
+// [Source N] markers are left as plain text so linkifySources() can turn
+// them into chips afterward.
+function formatInline(s){
+  s = s.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  s = s.replace(/`([^`]+?)`/g, '<code>$1</code>');
+  return s;
+}
+
+function formatText(raw){
+  // 1. Pull out fenced code blocks first so their contents are never
+  //    touched by inline/list/heading formatting.
+  const blocks = [];
+  let stripped = raw.replace(/```(\w*)\n?([\s\S]*?)```/g, (m, lang, code) => {
+    const idx = blocks.length;
+    blocks.push(`<pre><code>${escapeHtml(code.replace(/\n$/, ''))}</code></pre>`);
+    return `\u0000BLOCK${idx}\u0000`;
+  });
+
+  const rawLines = stripped.split('\n');
+  const htmlParts = [];
+  let listBuffer = [];
+  let listType = null; // 'ul' | 'ol'
+  let paraBuffer = [];
+
+  function flushList(){
+    if(listBuffer.length){
+      const tag = listType === 'ol' ? 'ol' : 'ul';
+      htmlParts.push(`<${tag}>${listBuffer.map(li => `<li>${li}</li>`).join('')}</${tag}>`);
+      listBuffer = [];
+      listType = null;
+    }
+  }
+  function flushPara(){
+    if(paraBuffer.length){
+      htmlParts.push(`<p>${paraBuffer.join('<br>')}</p>`);
+      paraBuffer = [];
+    }
+  }
+
+  for(const line of rawLines){
+    const trimmed = line.trim();
+
+    if(trimmed === ''){
+      flushList();
+      flushPara();
+      continue;
+    }
+
+    // Block placeholder (fenced code) — flush everything, emit as-is.
+    const blockMatch = trimmed.match(/^\u0000BLOCK(\d+)\u0000$/);
+    if(blockMatch){
+      flushList();
+      flushPara();
+      htmlParts.push(blocks[Number(blockMatch[1])]);
+      continue;
+    }
+
+    // Headings: #### / ### / ## / #
+    const headingMatch = trimmed.match(/^(#{1,4})\s+(.*)$/);
+    if(headingMatch){
+      flushList();
+      flushPara();
+      const level = Math.min(headingMatch[1].length + 2, 6); // ## -> h4, ### -> h5, etc
+      htmlParts.push(`<h${level}>${formatInline(escapeHtml(headingMatch[2]))}</h${level}>`);
+      continue;
+    }
+
+    // Numbered list item: "1. text"
+    const olMatch = trimmed.match(/^(\d+)[.)]\s+(.*)$/);
+    if(olMatch){
+      flushPara();
+      if(listType && listType !== 'ol') flushList();
+      listType = 'ol';
+      listBuffer.push(formatInline(escapeHtml(olMatch[2])));
+      continue;
+    }
+
+    // Bullet list item: "- text" or "* text"
+    const ulMatch = trimmed.match(/^[-*]\s+(.*)$/);
+    if(ulMatch){
+      flushPara();
+      if(listType && listType !== 'ul') flushList();
+      listType = 'ul';
+      listBuffer.push(formatInline(escapeHtml(ulMatch[1])));
+      continue;
+    }
+
+    // Otherwise: regular paragraph line.
+    flushList();
+    paraBuffer.push(formatInline(escapeHtml(line)));
+  }
+  flushList();
+  flushPara();
+
+  return htmlParts.join('');
+}
+
+function linkifySources(html){
+  return html.replace(/\[Source (\d+)\]/g, (m, n) =>
+    `<a class="src-chip" data-src="${n}" onclick="jumpToSource(event,'${n}')">[Source ${n}]</a>`);
+}
+
+window.jumpToSource = function(e, n){
+  e.preventDefault();
+  const card = document.querySelector(`.citation-card[data-id="${n}"][data-active="1"]`);
+  if(!card) return;
+  card.scrollIntoView({behavior:'smooth', block:'center'});
+  card.classList.add('flash');
+  card.classList.add('open');
+  setTimeout(()=>card.classList.remove('flash'), 900);
+};
+
+function toggleCitation(el){
+  el.classList.toggle('open');
+}
+
+function loadStats(){
+  fetch('/api/stats').then(r=>r.json()).then(d=>{
+    document.getElementById('stat-files').innerHTML = `<b>${d.files_indexed}</b> runbooks`;
+    document.getElementById('stat-chunks').innerHTML = `<b>${d.chunks_indexed}</b> chunks`;
+    document.getElementById('stat-mode').textContent = d.retrieval_mode.toUpperCase();
+  }).catch(()=>{
+    document.getElementById('stat-mode').textContent = 'BACKEND OFFLINE';
+  });
+}
+
+function renderChips(){
+  chipsEl.innerHTML = '';
+  SUGGESTIONS.forEach(q=>{
+    const c = document.createElement('div');
+    c.className = 'chip';
+    c.textContent = q;
+    c.onclick = () => { input.value = q; sendQuery(); };
+    chipsEl.appendChild(c);
+  });
+}
+
+function autoGrow(){
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 140) + 'px';
+}
+input.addEventListener('input', autoGrow);
+input.addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter' && !e.shiftKey){
+    e.preventDefault();
+    sendQuery();
+  }
+});
+sendBtn.addEventListener('click', sendQuery);
+
+function addUserMessage(text){
+  emptyState.style.display = 'none';
+  const div = document.createElement('div');
+  div.className = 'msg user';
+  div.innerHTML = `
+    <div class="msg-bubble">
+      <div class="msg-meta"><span>${nowStamp()}</span><span class="role-tag user">YOU</span></div>
+      ${escapeHtml(text)}
+    </div>`;
+  transcriptInner.appendChild(div);
+  scrollDown();
+}
+
+function scrollDown(){
+  transcript.scrollTop = transcript.scrollHeight;
+}
+
+async function sendQuery(){
+  const q = input.value.trim();
+  if(!q) return;
+  input.value = '';
+  autoGrow();
+  sendBtn.disabled = true;
+  addUserMessage(q);
+
+  const msgDiv = document.createElement('div');
+  msgDiv.className = 'msg assistant';
+  msgDiv.innerHTML = `
+    <div class="msg-bubble">
+      <div class="msg-meta"><span class="role-tag assistant">ASSISTANT</span><span>${nowStamp()}</span></div>
+      <div class="assistant-text"><span class="cursor"></span></div>
+    </div>`;
+  transcriptInner.appendChild(msgDiv);
+  scrollDown();
+  const textEl = msgDiv.querySelector('.assistant-text');
+
+  let rawText = '';
+  let sources = [];
+  let retrievalMs = 0, generationMs = 0;
+
+  try{
+    const res = await fetch('/api/query', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({query:q})
+    });
+    if(!res.ok || !res.body) throw new Error('request failed');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while(true){
+      const {done, value} = await reader.read();
+      if(done) break;
+      buffer += decoder.decode(value, {stream:true});
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop();
+      for(const part of parts){
+        const line = part.trim();
+        if(!line.startsWith('data:')) continue;
+        const payload = JSON.parse(line.slice(5).trim());
+
+        if(payload.type === 'no_match'){
+          retrievalMs = payload.retrieval_ms;
+          textEl.innerHTML = `
+            <div class="no-match-card">
+              <span class="tag">NO CONFIDENT MATCH · top similarity ${payload.top1_cosine}</span>
+              ${escapeHtml(payload.message)}
+            </div>`;
+        } else if(payload.type === 'sources'){
+          sources = payload.sources;
+          retrievalMs = payload.retrieval_ms;
+        } else if(payload.type === 'token'){
+          rawText += payload.text;
+          textEl.innerHTML = linkifySources(formatText(rawText)) + '<span class="cursor"></span>';
+          scrollDown();
+        } else if(payload.type === 'done'){
+          generationMs = payload.generation_ms;
+        }
+      }
+    }
+
+    // finalize: strip cursor, render citation cards
+    if(sources.length){
+      textEl.innerHTML = linkifySources(formatText(rawText));
+      const citeWrap = document.createElement('div');
+      citeWrap.className = 'citations';
+      sources.forEach((s, i) => {
+        const n = i + 1;
+        const sparseOnly = s.matched_sparse && !s.matched_dense;
+        const badge = s.matched_dense && s.matched_sparse ? 'DENSE+BM25'
+                    : s.matched_dense ? 'DENSE' : 'BM25';
+        const card = document.createElement('div');
+        card.className = 'citation-card' + (sparseOnly ? ' sparse-only' : '');
+        card.dataset.id = n;
+        card.dataset.active = '1';
+        card.onclick = () => toggleCitation(card);
+        card.innerHTML = `
+          <div class="cite-head">
+            <span class="cite-id">SRC ${String(n).padStart(2,'0')}</span>
+            <span class="cite-path">${escapeHtml(s.file)} — ${escapeHtml(s.section)}</span>
+            <span class="cite-badge">${badge}</span>
+            <span class="cite-lines">L${s.start_line}-${s.end_line}</span>
+          </div>
+          <div class="cite-snippet">${escapeHtml(s.text)}</div>`;
+        citeWrap.appendChild(card);
+      });
+      msgDiv.querySelector('.msg-bubble').appendChild(citeWrap);
+    } else if(!textEl.querySelector('.no-match-card')){
+      textEl.innerHTML = linkifySources(formatText(rawText || '(no response)'));
+    }
+
+    const lat = document.createElement('div');
+    lat.className = 'lat-footer';
+    lat.textContent = `retrieved in ${retrievalMs}ms` + (generationMs ? ` · generated in ${generationMs}ms` : '');
+    msgDiv.querySelector('.msg-bubble').appendChild(lat);
+
+  } catch(err){
+    textEl.innerHTML = `<div class="no-match-card"><span class="tag">CONNECTION ERROR</span>Could not reach the backend. Is server.py running? (${escapeHtml(String(err))})</div>`;
+  } finally {
+    sendBtn.disabled = false;
+    scrollDown();
+  }
+}
+
+renderChips();
+loadStats();
+</script>
+</body>
+</html>
