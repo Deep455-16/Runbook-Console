@@ -161,3 +161,12 @@ hpe-runbook-rag/
 - Log query → retrieved sources → answer → (optional) engineer feedback
   thumbs-up/down to build a dataset for evaluating and improving retrieval
   quality over time.
+
+<img width="1918" height="898" alt="image" src="https://github.com/user-attachments/assets/1643633b-a2a6-4ae3-9b98-c3aedf10f651" />
+
+<img width="1918" height="898" alt="image" src="https://github.com/user-attachments/assets/bb2a9c08-a8ba-4017-993d-f0050f5a72ff" />
+
+<img width="1917" height="902" alt="image" src="https://github.com/user-attachments/assets/50a99072-f137-4b01-8584-62313a9c6031" />
+
+<img width="1918" height="906" alt="image" src="https://github.com/user-attachments/assets/96eb3fe4-b70c-4f4b-9dfe-e040b6abd42f" />
+
