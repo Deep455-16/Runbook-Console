@@ -102,14 +102,27 @@ def split_words_with_overlap(words: list[str], max_words: int, overlap: int) -> 
 
 
 def chunk_file(path: Path, start_id: int) -> list[Chunk]:
-    """Parse one runbook markdown file into a list of Chunk objects.
+    """Parse one runbook file into a list of Chunk objects.
 
     Sections are delimited by H2 (##) headings. The H1 (#) heading, if
     present, is captured as the doc title and attached as context to every
     chunk from that file. Oversized sections are further split with a word
     overlap so retrieval precision doesn't degrade on long runbooks.
     """
-    lines = path.read_text(encoding="utf-8").splitlines()
+    if path.suffix.lower() == ".pdf":
+        from pdfminer.high_level import extract_text as pdf_extract_text
+        try:
+            raw_text = pdf_extract_text(str(path))
+        except Exception as e:
+            print(f"[ingest] WARNING: could not extract text from {path.name}: {e}")
+            raw_text = ""
+        lines = raw_text.splitlines()
+    elif path.suffix.lower() == ".docx":
+        import docx
+        doc = docx.Document(str(path))
+        lines = [p.text for p in doc.paragraphs]
+    else:
+        lines = path.read_text(encoding="utf-8").splitlines()
 
     doc_title = path.stem.replace("-", " ").replace("_", " ").title()
     for line in lines:
@@ -246,15 +259,19 @@ def main():
         print(f"[ingest] ERROR: {RUNBOOKS_DIR} does not exist.", file=sys.stderr)
         sys.exit(1)
 
-    md_files = sorted(RUNBOOKS_DIR.glob("*.md"))
-    if not md_files:
-        print(f"[ingest] ERROR: no .md files found in {RUNBOOKS_DIR}.", file=sys.stderr)
+    all_files = []
+    for ext in ("*.md", "*.pdf", "*.docx"):
+        all_files.extend(RUNBOOKS_DIR.glob(ext))
+    all_files = sorted(all_files)
+    
+    if not all_files:
+        print(f"[ingest] ERROR: no supported files found in {RUNBOOKS_DIR}.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"[ingest] found {len(md_files)} runbook file(s)")
+    print(f"[ingest] found {len(all_files)} runbook file(s)")
 
     all_chunks: list[Chunk] = []
-    for path in md_files:
+    for path in all_files:
         file_chunks = chunk_file(path, start_id=len(all_chunks))
         print(f"  - {path.name}: {len(file_chunks)} chunk(s)")
         all_chunks.extend(file_chunks)

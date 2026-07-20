@@ -285,29 +285,6 @@ def stats():
         "retrieval_mode": "hybrid (FAISS dense + BM25 sparse, RRF fusion)",
     }
 
-def convert_to_markdown(filename: str, content: bytes) -> str:
-    """Extract text from PDF/Docx and format as markdown."""
-    title = Path(filename).stem.replace("-", " ").replace("_", " ").title()
-    md_text = f"# {title}\n\n## Overview\n\n"
-    
-    if filename.lower().endswith(".pdf"):
-        import pypdf
-        reader = pypdf.PdfReader(io.BytesIO(content))
-        for page in reader.pages:
-            md_text += page.extract_text() + "\n\n"
-            
-    elif filename.lower().endswith(".docx"):
-        import docx
-        doc = docx.Document(io.BytesIO(content))
-        for para in doc.paragraphs:
-            md_text += para.text + "\n\n"
-            
-    else:
-        # Fallback for plain text / markdown
-        md_text = content.decode("utf-8", errors="ignore")
-        
-    return md_text
-
 @app.post("/api/upload_runbook")
 async def upload_runbook(file: UploadFile = File(...)):
     if not file.filename.lower().endswith((".md", ".pdf", ".docx")):
@@ -315,14 +292,8 @@ async def upload_runbook(file: UploadFile = File(...)):
         
     content = await file.read()
     
-    if file.filename.lower().endswith((".pdf", ".docx")):
-        md_text = convert_to_markdown(file.filename, content)
-        out_filename = Path(file.filename).with_suffix(".md").name
-        out_path = BASE_DIR / "runbooks" / out_filename
-        out_path.write_text(md_text, encoding="utf-8")
-    else:
-        out_path = BASE_DIR / "runbooks" / file.filename
-        out_path.write_bytes(content)
+    out_path = BASE_DIR / "runbooks" / file.filename
+    out_path.write_bytes(content)
         
     # Trigger ingestion
     try:
