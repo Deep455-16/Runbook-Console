@@ -44,10 +44,12 @@ os.environ["TRANSFORMERS_OFFLINE"] = "1"
 # Config
 # ------------------------------------------------------------------------
 
-EMBED_MODEL_PATH = r"D:\MiniLM-L6-v2"
+BASE_DIR = Path(__file__).parent
+MODELS_DIR = BASE_DIR / "models"
+EMBED_MODEL_PATH = str(MODELS_DIR / "MiniLM-L6-v2")
 
-RUNBOOKS_DIR = Path(__file__).parent / "runbooks"
-INDEX_DIR = Path(__file__).parent / "index_store"
+RUNBOOKS_DIR = BASE_DIR / "runbooks"
+INDEX_DIR = BASE_DIR / "index_store"
 
 FAISS_INDEX_PATH = INDEX_DIR / "faiss.index"
 BM25_PATH = INDEX_DIR / "bm25.pkl"

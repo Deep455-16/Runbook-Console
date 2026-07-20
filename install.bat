@@ -1,0 +1,9 @@
+@echo off
+echo Installing all requirements (including PDF/Word libraries)...
+pip install -r requirements.txt
+echo Downloading models...
+python download_models.py
+echo Ingesting runbooks to build the index...
+python ingest.py
+echo Installation complete!
+pause

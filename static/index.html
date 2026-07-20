@@ -403,6 +403,32 @@
   .send-btn:active{transform:scale(0.97);}
   .send-btn:disabled{opacity:0.45; cursor:not-allowed;}
 
+  .upload-btn{
+    background:var(--bg-raised);
+    color:var(--text-muted);
+    border:1px solid var(--border);
+    padding:13px 14px;
+    border-radius:10px;
+    cursor:pointer;
+    transition:color .15s, border-color .15s, background .15s;
+    flex-shrink:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .upload-btn:hover{
+    color:var(--accent-cyan);
+    border-color:var(--accent-cyan);
+    background:rgba(63,214,196,0.05);
+  }
+  .upload-btn.loading{
+    animation:pulse 1.5s infinite;
+    cursor:wait;
+    pointer-events:none;
+    color:var(--accent-signal);
+    border-color:var(--accent-signal);
+  }
+
   .hint{
     max-width:760px;
     margin:8px auto 0;
@@ -446,6 +472,10 @@
 
   <div class="input-bar">
     <div class="input-inner">
+      <button class="upload-btn" id="upload-btn" title="Upload Runbook (.md, .pdf, .docx)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+      </button>
+      <input type="file" id="file-input" accept=".md,.pdf,.docx" style="display: none;">
       <textarea id="input" rows="1" placeholder="e.g. what do I do if the database connection pool is exhausted?"></textarea>
       <button class="send-btn" id="send-btn">SEND ⏎</button>
     </div>
@@ -467,6 +497,42 @@ const emptyState = document.getElementById('empty-state');
 const input = document.getElementById('input');
 const sendBtn = document.getElementById('send-btn');
 const chipsEl = document.getElementById('chips');
+const uploadBtn = document.getElementById('upload-btn');
+const fileInput = document.getElementById('file-input');
+
+uploadBtn.addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  
+  uploadBtn.classList.add('loading');
+  addUserMessage(`[System] Uploading runbook: ${file.name}...`);
+  
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  try {
+    const res = await fetch('/api/upload_runbook', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if(!res.ok) {
+      const err = await res.text();
+      throw new Error(err);
+    }
+    
+    const data = await res.json();
+    addUserMessage(`[System] Successfully uploaded ${data.filename}. Index is updated and queryable!`);
+    loadStats();
+  } catch(err) {
+    addUserMessage(`[System] Failed to upload ${file.name}: ${err.message}`);
+  } finally {
+    uploadBtn.classList.remove('loading');
+    fileInput.value = '';
+  }
+});
 
 function nowStamp(){
   const d = new Date();

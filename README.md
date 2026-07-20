@@ -68,43 +68,19 @@ hpe-runbook-rag/
 
 ## Setup
 
-1. **Install dependencies** (Python 3.10+ recommended):
-   ```
-   pip install -r requirements.txt
-   ```
-   For GPU offload of the LLM on your GTX 1650, see the note at the bottom
-   of `requirements.txt` about installing a CUDA build of
-   `llama-cpp-python` instead of the default CPU-only wheel.
+1. **Automatic Installation:**
+   Run `install.bat` by double-clicking it or running it in the terminal.
+   This script will automatically:
+   - Install all required Python dependencies.
+   - Download the required local embedding model and the GGUF LLM into a `models/` folder.
+   - Ingest the runbooks in `runbooks/` and build the indexes in `index_store/`.
 
-2. **Confirm your local model paths.** The code currently points at:
-   - Embedding model: `D:\MiniLM-L6-v2` (a local sentence-transformers
-     checkpoint directory — `config.json`, `pytorch_model.bin` /
-     `model.safetensors`, tokenizer files, etc.)
-   - LLM: `D:\huggingface\hub\qwen2.5-3b-q3\qwen2.5-3b-instruct-q3_k_m.gguf`
+2. **Add your real runbooks (Optional):** 
+   Drop more `.md` files into `runbooks/` (same heading structure: one `#` title, `##` per section). 
+   If you add or edit runbooks, run `python ingest.py` to rebuild the indexes.
 
-   Both paths are defined as constants near the top of `ingest.py`
-   (embedding model) and `server.py` (both models) — edit them there if
-   your paths differ.
-
-3. **Add your real runbooks.** Drop more `.md` files into `runbooks/`
-   (same heading structure: one `#` title, `##` per section). The 5
-   included files are original sample content covering common ops
-   scenarios so the demo works out of the box — swap in your team's real
-   runbooks, or pull from public AWS/GCP/Azure troubleshooting docs per
-   the challenge's suggested data source.
-
-4. **Build the indexes:**
-   ```
-   python ingest.py
-   ```
-   This embeds every chunk and writes `index_store/faiss.index`,
-   `index_store/bm25.pkl`, and `index_store/chunks.json`. Re-run this any
-   time you add or edit runbooks.
-
-5. **Start the server:**
-   ```
-   uvicorn server:app --reload --port 8000
-   ```
+3. **Start the server:**
+   Run `START_APP.bat` to launch the backend.
    First startup loads the embedding model and the GGUF LLM into memory,
    so give it a few seconds. Then open **http://127.0.0.1:8000/**.
 

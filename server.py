@@ -33,10 +33,15 @@ from pathlib import Path
 from typing import List
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+import subprocess
+import io
+import webbrowser
+import threading
+import os
 
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
@@ -44,10 +49,10 @@ os.environ["TRANSFORMERS_OFFLINE"] = "1"
 # Config
 # ------------------------------------------------------------------------
 
-EMBED_MODEL_PATH = r"D:\MiniLM-L6-v2"
-LLM_MODEL_PATH = r"D:\huggingface\hub\qwen2.5-3b-q3\qwen2.5-3b-instruct-q3_k_m.gguf"
-
 BASE_DIR = Path(__file__).parent
+MODELS_DIR = BASE_DIR / "models"
+EMBED_MODEL_PATH = str(MODELS_DIR / "MiniLM-L6-v2")
+LLM_MODEL_PATH = str(MODELS_DIR / "Qwen2.5-3B-Instruct-Q3_K_M.gguf")
 INDEX_DIR = BASE_DIR / "index_store"
 FAISS_INDEX_PATH = INDEX_DIR / "faiss.index"
 BM25_PATH = INDEX_DIR / "bm25.pkl"
@@ -140,8 +145,7 @@ def tokenize(text: str) -> list[str]:
     return re.findall(r"[a-z0-9][a-z0-9_\-]*", text.lower())
 
 
-@app.on_event("startup")
-def load_everything():
+def load_indexes():
     missing = [p for p in (FAISS_INDEX_PATH, BM25_PATH, CHUNKS_PATH) if not p.exists()]
     if missing:
         names = ", ".join(str(p) for p in missing)
@@ -161,6 +165,10 @@ def load_everything():
     with open(BM25_PATH, "rb") as f:
         state.bm25 = pickle.load(f)
 
+@app.on_event("startup")
+def load_everything():
+    load_indexes()
+
     print(f"[server] loading embedding model from {EMBED_MODEL_PATH} ...")
     state.embedder = Embedder(EMBED_MODEL_PATH)
 
@@ -175,6 +183,13 @@ def load_everything():
 
     print(f"[server] ready. {len(state.chunks)} chunks indexed from "
           f"{len(set(c['file'] for c in state.chunks))} runbook file(s).")
+          
+    # Open browser automatically on first startup
+    if not os.environ.get("BROWSER_OPENED"):
+        os.environ["BROWSER_OPENED"] = "1"
+        def open_browser():
+            webbrowser.open("http://127.0.0.1:8000/")
+        threading.Timer(1.5, open_browser).start()
 
 
 # ------------------------------------------------------------------------
@@ -269,6 +284,56 @@ def stats():
         "llm_model": Path(LLM_MODEL_PATH).name,
         "retrieval_mode": "hybrid (FAISS dense + BM25 sparse, RRF fusion)",
     }
+
+def convert_to_markdown(filename: str, content: bytes) -> str:
+    """Extract text from PDF/Docx and format as markdown."""
+    title = Path(filename).stem.replace("-", " ").replace("_", " ").title()
+    md_text = f"# {title}\n\n## Overview\n\n"
+    
+    if filename.lower().endswith(".pdf"):
+        import pypdf
+        reader = pypdf.PdfReader(io.BytesIO(content))
+        for page in reader.pages:
+            md_text += page.extract_text() + "\n\n"
+            
+    elif filename.lower().endswith(".docx"):
+        import docx
+        doc = docx.Document(io.BytesIO(content))
+        for para in doc.paragraphs:
+            md_text += para.text + "\n\n"
+            
+    else:
+        # Fallback for plain text / markdown
+        md_text = content.decode("utf-8", errors="ignore")
+        
+    return md_text
+
+@app.post("/api/upload_runbook")
+async def upload_runbook(file: UploadFile = File(...)):
+    if not file.filename.lower().endswith((".md", ".pdf", ".docx")):
+        raise HTTPException(400, "Only .md, .pdf, and .docx files are supported")
+        
+    content = await file.read()
+    
+    if file.filename.lower().endswith((".pdf", ".docx")):
+        md_text = convert_to_markdown(file.filename, content)
+        out_filename = Path(file.filename).with_suffix(".md").name
+        out_path = BASE_DIR / "runbooks" / out_filename
+        out_path.write_text(md_text, encoding="utf-8")
+    else:
+        out_path = BASE_DIR / "runbooks" / file.filename
+        out_path.write_bytes(content)
+        
+    # Trigger ingestion
+    try:
+        subprocess.run(["python", str(BASE_DIR / "ingest.py")], check=True, capture_output=True)
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(500, f"Ingestion failed: {e.stderr.decode('utf-8', errors='ignore')}")
+        
+    # Reload the indexes dynamically
+    load_indexes()
+    
+    return {"status": "success", "filename": file.filename}
 
 
 @app.post("/api/query")

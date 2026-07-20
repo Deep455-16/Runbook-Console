@@ -1,18 +1,21 @@
 # --- Core API ---
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-python-multipart==0.0.9
-pydantic==2.9.2
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+pypdf
+python-docx
 
 # --- Retrieval ---
-transformers==4.44.2
-torch==2.4.1
-faiss-cpu==1.8.0
-rank-bm25==0.2.2
-numpy==1.26.4
+transformers
+torch
+faiss-cpu
+rank-bm25
+numpy
 
 # --- Local LLM (Qwen2.5-3B-Instruct GGUF) ---
-llama-cpp-python==0.2.90
+llama-cpp-python
+huggingface_hub
 
 # Notes:
 # 1. llama-cpp-python on Windows: the plain `pip install llama-cpp-python` gives you a
